@@ -1,0 +1,163 @@
+namespace: hasura
+
+example-db:
+  defines: runnable
+  inherits: postgresql/db
+  metadata:
+    name: Hasura Component Example PostgreSQL
+    description: |
+      PostgreSQL database used by the Hasura component example. It inherits Monk catalog
+      `postgresql/db`, stays private on the Monk network, and provides metadata storage plus
+      the default Hasura data source.
+    tags: hasura, postgres, database, component, example, local
+    website: https://www.postgresql.org/
+    source: https://github.com/postgres/postgres
+    publisher: monk.io
+    icon: https://www.postgresql.org/media/img/about/press/elephant.png
+    private: false
+  variables:
+    version:
+      type: string
+      value: "15"
+      description: Public Docker Hub postgres image tag used by the component example.
+    db_name:
+      type: string
+      env: POSTGRES_DB
+      value: <- $example-db-name
+      description: PostgreSQL database name created for the Hasura component example.
+    db_user:
+      type: string
+      env: POSTGRES_USER
+      value: <- $example-db-user
+      description: PostgreSQL user created for the Hasura component example.
+    db_pass:
+      type: string
+      env: POSTGRES_PASSWORD
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password for the Hasura component example.
+  containers:
+    postgres:
+      paths:
+        - <- `${monk-volume-path}/hasura-example-postgres:/var/lib/postgresql/data`
+  services:
+    postgres:
+      container: postgres
+      port: 5432
+      protocol: tcp
+      publish: false
+      description: Private PostgreSQL endpoint consumed by the Hasura component example.
+  checks:
+    readiness:
+      code: tcp-check-service("hasura/example-db", "postgres")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+example-app:
+  defines: runnable
+  inherits: hasura/base
+  metadata:
+    name: Hasura Component Example App
+    description: |
+      Component demonstration that inherits the reusable Hasura base and wires it to a concrete
+      PostgreSQL database from the Monk catalog. It publishes a localhost port for external
+      verification only.
+    tags: hasura, graphql, api, postgres, component, example, local
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    dev-mode:
+      type: string
+      env: HASURA_GRAPHQL_DEV_MODE
+      value: "true"
+      description: Enables Hasura development mode for the local component example.
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname read from the component example `db` connection.
+    database-port:
+      type: string
+      value: <- connection-port("db")
+      description: PostgreSQL port read from the component example `db` connection.
+    database-name:
+      type: string
+      value: <- $example-db-name
+      description: PostgreSQL database name used by the component example.
+    database-user:
+      type: string
+      value: <- $example-db-user
+      description: PostgreSQL username used by the component example.
+    database-password:
+      type: string
+      value: <- $example-db-password
+      description: Sensitive generated PostgreSQL password shared with the component example database.
+    admin-secret:
+      type: string
+      env: HASURA_GRAPHQL_ADMIN_SECRET
+      value: <- $example-admin-secret
+      description: Sensitive generated Hasura admin secret for the component example.
+    host-port:
+      type: int
+      value: 8088
+      description: Non-privileged host port published for local component example verification.
+  services:
+    http:
+      container: hasura
+      port: <- $server-port
+      protocol: tcp
+      publish: true
+      host-port: <- $host-port
+      description: Published local Hasura HTTP service for component example verification.
+  connections:
+    db:
+      target: hasura/example-db
+      service: postgres
+      description: Private PostgreSQL service connected to Hasura.
+  depends:
+    wait-for:
+      runnables:
+        - hasura/example-db
+      timeout: 180
+  checks:
+    readiness:
+      code: http-get-service("hasura/example-app", "http", "/healthz") get-member("status") 200
+      period: 10
+      initialDelay: 30
+      attempts: 30
+
+example:
+  defines: process-group
+  metadata:
+    name: Hasura Component Example
+    description: |
+      Component example that composes the reusable Hasura base with a concrete PostgreSQL
+      backing service and publishes Hasura on localhost for verification.
+    tags: hasura, graphql, api, postgres, component, example, local
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    example-db-name:
+      type: string
+      value: hasura_example
+      description: PostgreSQL database name shared by component example workloads.
+    example-db-user:
+      type: string
+      value: hasura
+      description: PostgreSQL username shared by component example workloads.
+    example-db-password:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated PostgreSQL password for the component example.
+    example-admin-secret:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated Hasura admin secret for the component example.
+  runnable-list:
+    - hasura/example-db
+    - hasura/example-app

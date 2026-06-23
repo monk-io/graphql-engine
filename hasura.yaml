@@ -1,0 +1,90 @@
+namespace: hasura
+
+base:
+  defines: runnable
+  metadata:
+    name: Hasura GraphQL Engine
+    description: |
+      Reusable Hasura GraphQL Engine component using the public hasura/graphql-engine image.
+      This base expects an external PostgreSQL-compatible metadata database connected as `db`.
+      Compatible Monk packages include self-hosted `postgresql/db` or hosted PostgreSQL packages
+      such as Neon. Inheriting templates should set admin-secret with secret("hasura-admin-secret")
+      for stable production credentials.
+    tags: hasura, graphql, api, postgres, component
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    hasura-image-tag:
+      type: string
+      value: v2.49.1
+      description: Public Docker Hub hasura/graphql-engine image tag to run.
+    server-port:
+      type: int
+      env: HASURA_GRAPHQL_SERVER_PORT
+      value: 8080
+      description: HTTP port Hasura listens on inside the container.
+    enable-console:
+      type: string
+      env: HASURA_GRAPHQL_ENABLE_CONSOLE
+      value: "true"
+      description: Enables the Hasura web console. Production deployments should keep admin-secret set.
+    dev-mode:
+      type: string
+      env: HASURA_GRAPHQL_DEV_MODE
+      value: "false"
+      description: Enables Hasura development mode when set to true; production-oriented templates leave it false.
+    enabled-log-types:
+      type: string
+      env: HASURA_GRAPHQL_ENABLED_LOG_TYPES
+      value: startup, http-log, webhook-log, websocket-log, query-log
+      description: Comma-separated Hasura log types enabled for operational visibility.
+    database-host:
+      type: string
+      value: ""
+      description: PostgreSQL hostname. Inheriting templates should set this from connection-hostname("db").
+    database-port:
+      type: string
+      value: ""
+      description: PostgreSQL port. Inheriting templates should set this from connection-port("db").
+    database-name:
+      type: string
+      value: hasura
+      description: PostgreSQL database name used for Hasura metadata and default data source.
+    database-user:
+      type: string
+      value: hasura
+      description: PostgreSQL username used for Hasura metadata and default data source.
+    database-password:
+      type: string
+      value: ""
+      description: Sensitive PostgreSQL password. Inheriting templates must set this from a connected backing service or secret("hasura-db-password").
+    metadata-database-url:
+      type: string
+      env: HASURA_GRAPHQL_METADATA_DATABASE_URL
+      value: <- `postgres://${database-user}:${database-password}@${database-host}:${database-port}/${database-name}`
+      description: PostgreSQL URL used by Hasura for metadata storage, assembled from Monk connection details.
+    default-database-url:
+      type: string
+      env: PG_DATABASE_URL
+      value: <- `postgres://${database-user}:${database-password}@${database-host}:${database-port}/${database-name}`
+      description: PostgreSQL URL exposed to Hasura as the default data source connection.
+    admin-secret:
+      type: string
+      env: HASURA_GRAPHQL_ADMIN_SECRET
+      value: ""
+      description: Sensitive Hasura admin secret. Inheriting templates must set secret("hasura-admin-secret") or a generated value.
+  containers:
+    hasura:
+      image: hasura/graphql-engine
+      image-tag: <- $hasura-image-tag
+      restart: unless-stopped
+  services:
+    http:
+      container: hasura
+      port: <- $server-port
+      protocol: tcp
+      publish: false
+      description: Private Hasura HTTP service for GraphQL, metadata APIs, health checks, and console.
