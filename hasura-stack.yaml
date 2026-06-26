@@ -1,0 +1,305 @@
+namespace: hasura
+
+stack-db:
+  defines: runnable
+  inherits: postgresql/db
+  metadata:
+    name: Hasura Standalone PostgreSQL
+    description: |
+      Private PostgreSQL database for the production-oriented standalone Hasura stack.
+      It inherits Monk catalog `postgresql/db` and is not published to the host or internet.
+    tags: hasura, postgres, database, standalone, production
+    website: https://www.postgresql.org/
+    source: https://github.com/postgres/postgres
+    publisher: monk.io
+    icon: https://www.postgresql.org/media/img/about/press/elephant.png
+    private: false
+  variables:
+    version:
+      type: string
+      value: "15"
+      description: Public Docker Hub postgres image tag used by the standalone stack.
+    db_name:
+      type: string
+      env: POSTGRES_DB
+      value: <- $stack-db-name
+      description: PostgreSQL database name created for Hasura.
+    db_user:
+      type: string
+      env: POSTGRES_USER
+      value: <- $stack-db-user
+      description: PostgreSQL user created for Hasura.
+    db_pass:
+      type: string
+      env: POSTGRES_PASSWORD
+      value: <- $stack-db-password
+      description: Sensitive PostgreSQL password. Uses secret("hasura-db-password") when set, otherwise generates a non-default value for self-contained verification.
+  containers:
+    postgres:
+      paths:
+        - <- `${monk-volume-path}/hasura-stack-postgres:/var/lib/postgresql/data`
+  services:
+    postgres:
+      container: postgres
+      port: 5432
+      protocol: tcp
+      publish: false
+      description: Private PostgreSQL endpoint consumed by the standalone Hasura stack.
+  checks:
+    readiness:
+      code: tcp-check-service("hasura/stack-db", "postgres")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+stack-app:
+  defines: runnable
+  inherits: hasura/base
+  metadata:
+    name: Hasura Standalone App
+    description: |
+      Production-oriented Hasura service connected to private PostgreSQL. It is intended to be
+      exposed only through Monk ingress on ingress-capable targets, with access protected by the
+      Hasura admin secret.
+    tags: hasura, graphql, api, postgres, standalone, production
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname read from the standalone stack `db` connection.
+    database-port:
+      type: string
+      value: <- connection-port("db")
+      description: PostgreSQL port read from the standalone stack `db` connection.
+    database-name:
+      type: string
+      value: <- $stack-db-name
+      description: PostgreSQL database name used by the standalone stack.
+    database-user:
+      type: string
+      value: <- $stack-db-user
+      description: PostgreSQL username used by the standalone stack.
+    database-password:
+      type: string
+      value: <- $stack-db-password
+      description: Sensitive PostgreSQL password shared with the standalone stack database.
+    admin-secret:
+      type: string
+      env: HASURA_GRAPHQL_ADMIN_SECRET
+      value: <- $stack-admin-secret
+      description: Sensitive Hasura admin secret. Inheriting production templates should provide secret("hasura-admin-secret") for stable credentials.
+  services:
+    http:
+      container: hasura
+      port: <- $server-port
+      protocol: tcp
+      publish: false
+      description: Hasura HTTP service intended for production ingress only.
+      ingress-routes:
+        hasura:
+          path-prefix: /
+  connections:
+    db:
+      target: hasura/stack-db
+      service: postgres
+      description: Private PostgreSQL service connected to Hasura.
+  depends:
+    wait-for:
+      runnables:
+        - hasura/stack-db
+      timeout: 180
+  checks:
+    readiness:
+      code: http-get-service("hasura/stack-app", "http", "/healthz") get-member("status") 200
+      period: 10
+      initialDelay: 30
+      attempts: 30
+
+stack:
+  defines: process-group
+  metadata:
+    name: Hasura Standalone Stack
+    description: |
+      Secure production-oriented standalone Hasura stack with private PostgreSQL and Hasura exposed
+      only through Monk ingress. No default passwords are used; sensitive values read plain secret
+      names when present and otherwise use generated non-default values for verification.
+    tags: hasura, graphql, api, postgres, standalone, production
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    stack-db-name:
+      type: string
+      value: hasura
+      description: PostgreSQL database name shared by standalone stack workloads.
+    stack-db-user:
+      type: string
+      value: hasura
+      description: PostgreSQL username shared by standalone stack workloads.
+    stack-db-password:
+      type: string
+      value: <- secret("hasura-db-password") default(random-uuid)
+      description: Sensitive PostgreSQL password for the standalone stack. Set secret("hasura-db-password") when inheriting for stable production credentials.
+    stack-admin-secret:
+      type: string
+      value: <- secret("hasura-admin-secret") default(random-uuid)
+      description: Sensitive Hasura admin secret for the standalone stack. Set secret("hasura-admin-secret") when inheriting for stable production credentials.
+  runnable-list:
+    - hasura/stack-db
+    - hasura/stack-app
+
+stack-local-db:
+  defines: runnable
+  inherits: hasura/stack-db
+  metadata:
+    name: Hasura Local Standalone PostgreSQL
+    description: |
+      Private PostgreSQL database for the local standalone verification flavor. It stays private
+      on the Monk network and is accessed only through Monk connections.
+    tags: hasura, postgres, database, standalone, local
+    website: https://www.postgresql.org/
+    source: https://github.com/postgres/postgres
+    publisher: monk.io
+    icon: https://www.postgresql.org/media/img/about/press/elephant.png
+    private: false
+  variables:
+    db_name:
+      type: string
+      env: POSTGRES_DB
+      value: <- $stack-local-db-name
+      description: PostgreSQL database name created for the local stack flavor.
+    db_user:
+      type: string
+      env: POSTGRES_USER
+      value: <- $stack-local-db-user
+      description: PostgreSQL user created for the local stack flavor.
+    db_pass:
+      type: string
+      env: POSTGRES_PASSWORD
+      value: <- $stack-local-db-password
+      description: Sensitive generated PostgreSQL password for the local stack flavor.
+  containers:
+    postgres:
+      paths:
+        - <- `${monk-volume-path}/hasura-stack-local-postgres:/var/lib/postgresql/data`
+  checks:
+    readiness:
+      code: tcp-check-service("hasura/stack-local-db", "postgres")
+      period: 10
+      initialDelay: 10
+      attempts: 30
+
+stack-local-app:
+  defines: runnable
+  inherits: hasura/stack-app
+  metadata:
+    name: Hasura Local Standalone App
+    description: |
+      Local standalone verification flavor for Hasura. It publishes a non-privileged localhost
+      port so the health endpoint can be checked externally while keeping PostgreSQL private.
+    tags: hasura, graphql, api, postgres, standalone, local
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    dev-mode:
+      type: string
+      env: HASURA_GRAPHQL_DEV_MODE
+      value: "true"
+      description: Enables Hasura development mode for local verification.
+    database-host:
+      type: string
+      value: <- connection-hostname("db")
+      description: PostgreSQL hostname read from the local stack `db` connection.
+    database-port:
+      type: string
+      value: <- connection-port("db")
+      description: PostgreSQL port read from the local stack `db` connection.
+    database-name:
+      type: string
+      value: <- $stack-local-db-name
+      description: PostgreSQL database name used by the local stack flavor.
+    database-user:
+      type: string
+      value: <- $stack-local-db-user
+      description: PostgreSQL username used by the local stack flavor.
+    database-password:
+      type: string
+      value: <- $stack-local-db-password
+      description: Sensitive generated PostgreSQL password shared with the local stack database.
+    admin-secret:
+      type: string
+      env: HASURA_GRAPHQL_ADMIN_SECRET
+      value: <- $stack-local-admin-secret
+      description: Sensitive generated Hasura admin secret for the local stack flavor.
+    host-port:
+      type: int
+      value: 8089
+      description: Non-privileged host port published for local stack verification.
+  services:
+    http:
+      container: hasura
+      port: <- $server-port
+      protocol: tcp
+      publish: true
+      host-port: <- $host-port
+      description: Published local Hasura HTTP service for standalone local verification.
+  connections:
+    db:
+      target: hasura/stack-local-db
+      service: postgres
+      description: Private PostgreSQL service connected to the local Hasura flavor.
+  depends:
+    wait-for:
+      runnables:
+        - hasura/stack-local-db
+      timeout: 180
+  checks:
+    readiness:
+      code: http-get-service("hasura/stack-local-app", "http", "/healthz") get-member("status") 200
+      period: 10
+      initialDelay: 30
+      attempts: 30
+
+stack-local:
+  defines: process-group
+  metadata:
+    name: Hasura Standalone Local Stack
+    description: |
+      Local verification flavor for the standalone Hasura stack. PostgreSQL remains private while
+      Hasura publishes a localhost HTTP port for external health checks.
+    tags: hasura, graphql, api, postgres, standalone, local
+    website: https://hasura.io/
+    source: https://github.com/hasura/graphql-engine
+    publisher: monk.io
+    icon: https://hasura.io/brand-assets/hasura-icon-primary.svg
+    private: false
+  variables:
+    stack-local-db-name:
+      type: string
+      value: hasura_local
+      description: PostgreSQL database name shared by local stack workloads.
+    stack-local-db-user:
+      type: string
+      value: hasura
+      description: PostgreSQL username shared by local stack workloads.
+    stack-local-db-password:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated PostgreSQL password for the local stack flavor.
+    stack-local-admin-secret:
+      type: string
+      value: <- random-uuid
+      description: Sensitive generated Hasura admin secret for the local stack flavor.
+  runnable-list:
+    - hasura/stack-local-db
+    - hasura/stack-local-app

@@ -1,0 +1,4 @@
+LOAD hasura.yaml
+LOAD hasura-example.yaml
+LOAD hasura-stack.yaml
+ENTRY hasura/stack-local
