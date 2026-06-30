@@ -37,8 +37,12 @@ example-db:
       description: Sensitive generated PostgreSQL password for the Hasura component example.
   containers:
     postgres:
-      paths:
-        - <- `${monk-volume-path}/hasura-example-postgres:/var/lib/postgresql/data`
+      mounted-volumes:
+        pgdata:
+          path: /var/lib/postgresql/data
+  volumes:
+    pgdata:
+      kind: local
   services:
     postgres:
       container: postgres
