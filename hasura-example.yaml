@@ -2,7 +2,7 @@ namespace: hasura
 
 example-db:
   defines: runnable
-  inherits: postgresql/db
+  inherits: postgresql/db-v17
   metadata:
     name: Hasura Component Example PostgreSQL
     description: |
@@ -35,14 +35,6 @@ example-db:
       env: POSTGRES_PASSWORD
       value: <- $example-db-password
       description: Sensitive generated PostgreSQL password for the Hasura component example.
-  containers:
-    postgres:
-      mounted-volumes:
-        pgdata:
-          path: /var/lib/postgresql/data
-  volumes:
-    pgdata:
-      kind: local
   services:
     postgres:
       container: postgres

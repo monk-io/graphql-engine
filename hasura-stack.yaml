@@ -2,7 +2,7 @@ namespace: hasura
 
 stack-db:
   defines: runnable
-  inherits: postgresql/db
+  inherits: postgresql/db-v17
   metadata:
     name: Hasura Standalone PostgreSQL
     description: |
@@ -34,14 +34,6 @@ stack-db:
       env: POSTGRES_PASSWORD
       value: <- $stack-db-password
       description: Sensitive PostgreSQL password. Uses secret("hasura-db-password") when set, otherwise generates a non-default value for self-contained verification.
-  containers:
-    postgres:
-      mounted-volumes:
-        pgdata:
-          path: /var/lib/postgresql/data
-  volumes:
-    pgdata:
-      kind: local
   services:
     postgres:
       container: postgres
