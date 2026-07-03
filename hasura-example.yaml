@@ -104,6 +104,7 @@ example-app:
       container: hasura
       port: <- $server-port
       protocol: tcp
+      publish: true
       host-port: <- $host-port
       description: Published local Hasura HTTP service for component example verification.
   connections:
