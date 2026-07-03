@@ -2,7 +2,7 @@ namespace: hasura
 
 stack-db:
   defines: runnable
-  inherits: postgresql/db
+  inherits: postgresql/db-v17
   metadata:
     name: Hasura Standalone PostgreSQL
     description: |
@@ -34,10 +34,6 @@ stack-db:
       env: POSTGRES_PASSWORD
       value: <- $stack-db-password
       description: Sensitive PostgreSQL password. Uses secret("hasura-db-password") when set, otherwise generates a non-default value for self-contained verification.
-  containers:
-    postgres:
-      paths:
-        - <- `${monk-volume-path}/hasura-stack-postgres:/var/lib/postgresql/data`
   services:
     postgres:
       container: postgres
@@ -185,10 +181,6 @@ stack-local-db:
       env: POSTGRES_PASSWORD
       value: <- $stack-local-db-password
       description: Sensitive generated PostgreSQL password for the local stack flavor.
-  containers:
-    postgres:
-      paths:
-        - <- `${monk-volume-path}/hasura-stack-local-postgres:/var/lib/postgresql/data`
   checks:
     readiness:
       code: tcp-check-service("hasura/stack-local-db", "postgres")
